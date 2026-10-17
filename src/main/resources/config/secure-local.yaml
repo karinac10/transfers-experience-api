@@ -1,0 +1,30 @@
+logging:
+  apiName: "transfer-experience-api"
+  layer: "Experience API"
+  
+https:
+  listener:
+    host: "0.0.0.0"
+    port: "8081"
+    timeout: "60000"
+    path: "/api/v1/*"
+
+#API AutoDiscovery
+api:
+  id: "21241923"
+
+# Until Successful
+untilSuccessful:
+  retries: "1"
+  delay: "2000"
+  
+# Connection to the Process API
+process:
+  payment-order:
+    api:
+      protocol: "HTTP"
+      host: "localhost"
+      port: "8082"
+      timeout: "240000"
+      basepath: "/payment-order"
+      paymentOrderInitiate: "/PaymentOrder/Initiate"

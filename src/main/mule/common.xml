@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+    <!--
+        Global error handler — referenciar con <error-handler ref="global-error-handler"/> en cada flow.
+        Cubre: connectivity, timeout, errores de negocio TRANSFERENCIA:* y catch-all.
+    -->
+    <error-handler name="global-error-handler">
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="dfc553a5-863f-4710-8fb7-9e78123acc9d" type="ANY">
+			<ee:transform doc:name="Error Payload" doc:id="ae15a380-163c-4e1f-ada6-879d40fdccb0" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<logger level="ERROR" doc:name="Error Logger" doc:id="15694d83-8edc-444b-b42b-6925aceee1f5" message="[ERROR] flujo: #[vars.flowVar] para transactionId: #[vars.transactionId]." />
+			<set-variable value="#[vars.httpStatus default attributes.statusCode default 500]" doc:name="Set Variable - httpStatus" doc:id="e358fc6b-ca3f-47d1-b3f9-0c7f5051b366" variableName="httpStatus" />
+		</on-error-propagate>
+
+
+    </error-handler>
+
+    <!-- Logging estructurado de entrada -->
+    <sub-flow name="global_apiEntryPoint" doc:id="961da81e-755b-4d90-8962-7434cdc44599" >
+		<try doc:name="Validate Request Payload" doc:id="79593c95-0755-411a-bd1f-ac66000b7a86" >
+			<ee:transform doc:name="Check Request Payload" doc:id="34fb0e22-bf26-4d97-84a3-8bfa7184237d" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+if (attributes.method == "GET" or isEmpty(attributes.method))
+    {}
+else
+    payload as Object]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<error-handler >
+				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="39754114-6f6d-46df-8547-42fae80e31e4" type="MULE:EXPRESSION" >
+					<raise-error doc:name="Raise Validation BAD_REQUEST" doc:id="f68f59c7-91b4-4832-8b03-9c7ad4d19821" type="APP:INVALID_PAYLOAD" />
+				</on-error-propagate>
+			</error-handler>
+		</try>
+		<ee:transform doc:name="transactionId and incomingAttr" doc:id="998ca84e-48cc-4dad-8d60-248de6714d15" >
+			<ee:message />
+			<ee:variables >
+				<ee:set-variable variableName="transactionId" ><![CDATA[%dw 2.0
+output application/java
+---
+attributes.headers."X-Idempotency-Key"]]></ee:set-variable>
+				<ee:set-variable variableName="incomingAttr" ><![CDATA[output application/json
+---
+message.attributes]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<ee:transform doc:name="flowVar" doc:id="0a303f55-371e-41fe-9e69-22d3b9436a21" >
+			<ee:message />
+			<ee:variables >
+				<ee:set-variable variableName="flowVar" ><![CDATA[%dw 2.0
+output application/json
+---
+vars.incomingAttr.requestUri]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+	</sub-flow>
+	<sub-flow name="log-request-sf">
+        <logger level="INFO"
+            message="#['[' ++ correlationId ++ '] REQUEST ' ++ (attributes.method default '') ++ ' ' ++ (attributes.requestPath default '') ++ ' | idempotencyKey=' ++ (attributes.headers.'x-idempotency-key' default 'N/A')]"
+            doc:name="Log Request"/>
+    </sub-flow>
+
+    <!-- Logging estructurado de salida -->
+    <sub-flow name="log-response-sf">
+        <logger level="INFO"
+            message="#['[' ++ correlationId ++ '] RESPONSE status=' ++ ((vars.httpStatus default 200) as String)]"
+            doc:name="Log Response"/>
+    </sub-flow>
+    
+
+</mule>
