@@ -1,0 +1,198 @@
+name: CI/CD
+
+# Pipeline de UNA capa (un repositorio = un proyecto Mule en la raíz).
+#   Pull request -> main : compila, prueba y valida (sin desplegar, sin secretos de despliegue)
+#   Push a main          : compila UNA vez -> publica la release inmutable vX.Y.N
+#                          -> despliega ESA release a dev -> qa -> prod (aprobación manual)
+# Los valores propios de la capa están en .github/pipeline-config.env.
+# Un hotfix es un PR a main como cualquier otro: no hay ramas con atajos.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # X.Y se sube a mano; el parche es el número de ejecución. Nunca SNAPSHOT.
+  MAJOR_MINOR: "1.0"
+
+jobs:
+  version:
+    name: Calcular versión
+    runs-on: ubuntu-latest
+    outputs:
+      value: ${{ steps.v.outputs.value }}
+    steps:
+      - id: v
+        run: echo "value=${MAJOR_MINOR}.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+  # ────────────────────────────────────────────────────────────────
+  # 1. Compilar, probar y fallar si la cobertura no se cumple
+  # ────────────────────────────────────────────────────────────────
+  build-and-test:
+    name: Build & test
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERSION: ${{ needs.version.outputs.value }}
+      # Connected App de SOLO LECTURA en Exchange (scope Exchange Viewer)
+      EXCHANGE_PASSWORD: ${{ secrets.EXCHANGE_CLIENT_ID }}~?~${{ secrets.EXCHANGE_CLIENT_SECRET }}
+      # Llave de pruebas: NO es la de ningún ambiente
+      MULE_KEY: ${{ secrets.MULE_KEY_TEST }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cargar configuración de la capa
+        run: grep -E '^[A-Z_]+=' .github/pipeline-config.env >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          # Debe coincidir con el runtime de Mule del pom (4.4/4.5: 8 u 11; 4.6+: 17)
+          java-version: ${{ vars.JAVA_VERSION || '17' }}
+          cache: maven
+
+      - name: Compuertas estáticas (pom y configuración por ambiente)
+        run: |
+          python3 -m pip install --quiet pyyaml
+          # shellcheck disable=SC2086
+          python3 scripts/validate_project.py . $VALIDATE_FLAGS
+
+      - name: Fijar versión de la release (rechaza SNAPSHOT)
+        run: |
+          mvn -B -ntp -s .github/maven-settings.xml \
+            org.codehaus.mojo:versions-maven-plugin:2.16.2:set \
+            -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+          actual=$(mvn -B -ntp -q -s .github/maven-settings.xml \
+            help:evaluate -Dexpression=project.version -DforceStdout)
+          if [ "$actual" != "$VERSION" ] || [[ "$actual" == *SNAPSHOT* ]]; then
+            echo "::error::Versión inválida en el pom: '$actual' (esperada '$VERSION')"
+            exit 1
+          fi
+
+      # 'verify' ejecuta compilación, MUnit, cobertura (falla bajo 80 %) y empaquetado.
+      # El .jar que se publica es el mismo que se probó: no se reconstruye después.
+      - name: Compilar, MUnit y compuerta de cobertura
+        run: |
+          mvn -B -ntp -s .github/maven-settings.xml clean verify \
+            -Dmule.env=local -Dmule.key="$MULE_KEY"
+
+      - name: Verificar artefacto y calcular SHA-256
+        working-directory: target
+        run: |
+          shopt -s nullglob
+          jars=(*-mule-application.jar)
+          if [ "${#jars[@]}" -ne 1 ]; then
+            echo "::error::Se esperaba exactamente un *-mule-application.jar y hay ${#jars[@]}"
+            exit 1
+          fi
+          sha256sum "${jars[0]}" | tee "${jars[0]}.sha256"
+
+      - name: Reporte de cobertura MUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: target/site/munit/coverage/
+          if-no-files-found: warn
+
+      - name: Subir artefacto (solo en main)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifact
+          path: |
+            target/*-mule-application.jar
+            target/*-mule-application.jar.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  # ────────────────────────────────────────────────────────────────
+  # 2. Publicar la release versionada e inmutable (fuente única de despliegue)
+  # ────────────────────────────────────────────────────────────────
+  publish:
+    name: Publicar release v${{ needs.version.outputs.value }}
+    needs: [version, build-and-test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.value }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: artifact
+          path: dist
+
+      - name: Verificar sumas y publicar
+        run: |
+          cd dist
+          sha256sum -c ./*.sha256
+          sha256sum ./*.jar | sed 's# \./# #' > SHA256SUMS
+          cat SHA256SUMS
+          # Falla si el tag ya existe: una versión publicada no se reemplaza.
+          gh release create "v${VERSION}" ./*.jar SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "v${VERSION}" \
+            --notes "Commit ${GITHUB_SHA}. Ejecución: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+  # ────────────────────────────────────────────────────────────────
+  # 3. Promoción: la MISMA release a dev -> qa -> prod
+  #    (qué ambientes llaman de verdad a Anypoint: LIVE_ENVS en deploy.yml)
+  # ────────────────────────────────────────────────────────────────
+  deploy-dev:
+    name: Deploy dev
+    needs: [version, publish]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: dev
+      version: ${{ needs.version.outputs.value }}
+    secrets: inherit
+
+  deploy-qa:
+    name: Deploy qa
+    needs: [version, deploy-dev]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: qa
+      version: ${{ needs.version.outputs.value }}
+    secrets: inherit
+
+  # El environment 'prod' tiene revisores obligatorios y "Prevent self-review":
+  # el job queda en pausa hasta que otra persona aprueba, y solo entonces
+  # se liberan los secretos de producción.
+  deploy-prod:
+    name: Deploy prod (aprobación y verificaciones)
+    needs: [version, deploy-qa]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: prod
+      version: ${{ needs.version.outputs.value }}
+    secrets: inherit

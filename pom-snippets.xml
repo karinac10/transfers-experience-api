@@ -1,0 +1,83 @@
+<!--
+  Fragmentos que debe tener el pom.xml de CADA proyecto (system, process, experience).
+  El workflow y los scripts los alimentan con -D; aquí no hay valores ni credenciales.
+  scripts/validate_project.py falla el build si se desactiva la compuerta o se escribe un secreto.
+-->
+
+<properties>
+  <!-- UNA sola fuente para el runtime: la usan el build y el despliegue -->
+  <app.runtime>4.6.0</app.runtime>
+  <munit.version>3.2.0</munit.version>
+  <mule.maven.plugin.version>4.1.1</mule.maven.plugin.version>
+</properties>
+
+<build>
+  <plugins>
+
+    <!-- 1) Compuerta de cobertura: 'mvn verify' FALLA bajo 80 %.
+            Valores literales a propósito: validate_project.py los audita. -->
+    <plugin>
+      <groupId>com.mulesoft.munit.tools</groupId>
+      <artifactId>munit-maven-plugin</artifactId>
+      <version>${munit.version}</version>
+      <executions>
+        <execution>
+          <id>test</id>
+          <phase>test</phase>
+          <goals>
+            <goal>test</goal>
+            <goal>coverage-report</goal>
+          </goals>
+        </execution>
+      </executions>
+      <configuration>
+        <coverage>
+          <runCoverage>true</runCoverage>
+          <failBuild>true</failBuild>
+          <requiredApplicationCoverage>80</requiredApplicationCoverage>
+        </coverage>
+      </configuration>
+    </plugin>
+
+    <!-- 2) Despliegue a CloudHub 2.0 con Connected App. Sin usuario ni contraseña. -->
+    <plugin>
+      <groupId>org.mule.tools.maven</groupId>
+      <artifactId>mule-maven-plugin</artifactId>
+      <version>${mule.maven.plugin.version}</version>
+      <extensions>true</extensions>
+      <configuration>
+        <cloudhub2Deployment>
+          <uri>https://anypoint.mulesoft.com</uri>
+          <provider>MC</provider>
+          <environment>${ch2.environment}</environment>
+          <!-- Nombre del espacio, p. ej. Cloudhub-US-East-2 (no "Shared Space") -->
+          <target>${ch2.target}</target>
+          <muleVersion>${app.runtime}</muleVersion>
+          <applicationName>${ch2.appName}</applicationName>
+          <replicas>${ch2.replicas}</replicas>
+          <vCores>${ch2.vcores}</vCores>
+          <connectedAppClientId>${anypoint.connectedApp.id}</connectedAppClientId>
+          <connectedAppClientSecret>${anypoint.connectedApp.secret}</connectedAppClientSecret>
+          <connectedAppGrantType>client_credentials</connectedAppGrantType>
+          <deploymentTimeout>600000</deploymentTimeout>
+          <!-- OJO: si se declaran properties/secureProperties, CloudHub 2.0 elimina
+               cualquier otra propiedad que no esté aquí. Declara TODAS las que usa la app. -->
+          <properties>
+            <mule.env>${mule.env}</mule.env>
+          </properties>
+          <secureProperties>
+            <mule.key>${mule.key}</mule.key>
+          </secureProperties>
+          <deploymentSettings>
+            <updateStrategy>rolling</updateStrategy>
+            <enforceDeployingReplicasAcrossNodes>true</enforceDeployingReplicasAcrossNodes>
+          </deploymentSettings>
+        </cloudhub2Deployment>
+      </configuration>
+    </plugin>
+
+  </plugins>
+</build>
+
+<!-- 3) Repositorios: déjalos en el pom (Studio ya los genera). El id debe ser
+        anypoint-exchange-v3 para que coincida con .github/maven-settings.xml. -->
