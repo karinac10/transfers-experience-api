@@ -61,6 +61,10 @@ jobs:
           java-version: ${{ vars.JAVA_VERSION || '17' }}
           cache: maven
 
+      # El mule-maven-plugin solo soporta ciertas versiones de Maven: se fija una conocida.
+      - name: Instalar Maven fijo
+        run: bash scripts/install-maven.sh
+
       - name: Compuertas estáticas (pom y configuración por ambiente)
         run: |
           python3 -m pip install --quiet pyyaml

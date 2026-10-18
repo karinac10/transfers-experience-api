@@ -123,6 +123,10 @@ jobs:
           java-version: ${{ vars.JAVA_VERSION || '17' }}
           cache: maven
 
+      # El mule-maven-plugin solo soporta ciertas versiones de Maven: se fija una conocida.
+      - name: Instalar Maven fijo
+        run: bash pipeline/scripts/install-maven.sh
+
       - name: Descargar la release y verificar SHA-256
         run: |
           mkdir -p dist
