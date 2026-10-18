@@ -31,16 +31,16 @@
                         value='#[output application/java --- {statusCode: 200, headers: {}}]'/>
                 </munit-tools:then-return>
             </munit-tools:mock-when>
-            <munit-tools:set-event doc:id="cc000004-0001-0001-0001-000000000004">
-                <munit-tools:payload mediaType="application/json" value="#[{}]"/>
-                <munit-tools:attributes
-                    value='#[output application/java --- {uriParams: {id: "test-order-e2e-uuid-001"}, method: "GET", headers: {}, requestPath: "/api/v1/transferencias/test-order-e2e-uuid-001", requestUri: "/api/v1/transferencias/test-order-e2e-uuid-001"}]'/>
-                <munit-tools:variables>
-                    <munit-tools:variable key="transactionId" value="exp-get-t1-tx-id"/>
-                </munit-tools:variables>
-            </munit-tools:set-event>
         </munit:behavior>
         <munit:execution>
+            <munit:set-event doc:id="cc000004-0001-0001-0001-000000000004">
+                <munit:payload mediaType="application/json" value="#[{}]"/>
+                <munit:attributes
+                    value='#[output application/java --- {uriParams: {id: "test-order-e2e-uuid-001"}, method: "GET", headers: {}, requestPath: "/api/v1/transferencias/test-order-e2e-uuid-001", requestUri: "/api/v1/transferencias/test-order-e2e-uuid-001"}]'/>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-get-t1-tx-id"/>
+                </munit:variables>
+            </munit:set-event>
             <flow-ref name="get-transferencia-experience-impl-sf" doc:id="cc000005-0001-0001-0001-000000000005"/>
         </munit:execution>
         <munit:validation>
@@ -81,16 +81,16 @@
                     <munit-tools:error typeId="HTTP:NOT_FOUND"/>
                 </munit-tools:then-return>
             </munit-tools:mock-when>
-            <munit-tools:set-event doc:id="cc000012-0002-0002-0002-000000000012">
-                <munit-tools:payload mediaType="application/json" value="#[{}]"/>
-                <munit-tools:attributes
-                    value='#[output application/java --- {uriParams: {id: "orden-inexistente-999"}, method: "GET", headers: {}, requestPath: "/api/v1/transferencias/orden-inexistente-999", requestUri: "/api/v1/transferencias/orden-inexistente-999"}]'/>
-                <munit-tools:variables>
-                    <munit-tools:variable key="transactionId" value="exp-get-t2-tx-id"/>
-                </munit-tools:variables>
-            </munit-tools:set-event>
         </munit:behavior>
         <munit:execution>
+            <munit:set-event doc:id="cc000012-0002-0002-0002-000000000012">
+                <munit:payload mediaType="application/json" value="#[{}]"/>
+                <munit:attributes
+                    value='#[output application/java --- {uriParams: {id: "orden-inexistente-999"}, method: "GET", headers: {}, requestPath: "/api/v1/transferencias/orden-inexistente-999", requestUri: "/api/v1/transferencias/orden-inexistente-999"}]'/>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-get-t2-tx-id"/>
+                </munit:variables>
+            </munit:set-event>
             <flow-ref name="get-transferencia-experience-impl-sf" doc:id="cc000013-0002-0002-0002-000000000013"/>
         </munit:execution>
         <munit:validation>

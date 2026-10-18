@@ -45,6 +45,10 @@
 					</execution>
 				</executions>
 				<configuration>
+					<systemPropertyVariables>
+						<mule.env>local</mule.env>
+						<mule.key>1234567890ABCDEF1234567890ABCDEF</mule.key>
+					</systemPropertyVariables>
 					<coverage>
 						<runCoverage>true</runCoverage>
 						<failBuild>true</failBuild>
