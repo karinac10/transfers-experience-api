@@ -39,15 +39,15 @@
         </munit:behavior>
 
         <munit:execution>
-            <munit-tools:set-event doc:id="bb000004-0001-0001-0001-000000000004">
-                <munit-tools:payload
+            <munit:set-event doc:id="bb000004-0001-0001-0001-000000000004">
+                <munit:payload
                     mediaType="application/json"
                     value='#[output application/json --- {cuentaOrigen: "100200300", cuentaDestino: "900800700", bancoDestino: "BAT-0088", monto: 150.75, moneda: "USD", concepto: "Pago de prueba", fechaSolicitud: "2026-10-01T14:32:10-06:00"}]'/>
-                <munit-tools:variables>
-                    <munit-tools:variable key="transactionId" value="exp-t1-tx-id"/>
-                    <munit-tools:variable key="idempotencyKey" value="exp-t1-idem-key"/>
-                </munit-tools:variables>
-            </munit-tools:set-event>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-t1-tx-id"/>
+                    <munit:variable key="idempotencyKey" value="exp-t1-idem-key"/>
+                </munit:variables>
+            </munit:set-event>
             <flow-ref name="post-transferencias-experience-impl-sf" doc:id="bb000005-0001-0001-0001-000000000005"/>
         </munit:execution>
 
@@ -78,15 +78,15 @@
                 doc:id="bb000010-0002-0002-0002-000000000010">
 
         <munit:execution>
-            <munit-tools:set-event doc:id="bb000011-0002-0002-0002-000000000011">
-                <munit-tools:payload
+            <munit:set-event doc:id="bb000011-0002-0002-0002-000000000011">
+                <munit:payload
                     mediaType="application/json"
                     value='#[output application/json --- {cuentaOrigen: "100200300", cuentaDestino: "900800700", bancoDestino: "BAT-0088", monto: -100.00, moneda: "USD", concepto: "Pago de prueba", fechaSolicitud: "2026-10-01T14:32:10-06:00"}]'/>
-                <munit-tools:variables>
-                    <munit-tools:variable key="transactionId" value="exp-t2-tx-id"/>
-                    <munit-tools:variable key="idempotencyKey" value="exp-t2-idem-key"/>
-                </munit-tools:variables>
-            </munit-tools:set-event>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-t2-tx-id"/>
+                    <munit:variable key="idempotencyKey" value="exp-t2-idem-key"/>
+                </munit:variables>
+            </munit:set-event>
             <flow-ref name="post-transferencias-experience-impl-sf" doc:id="bb000012-0002-0002-0002-000000000012"/>
         </munit:execution>
 
@@ -121,15 +121,15 @@
                 doc:id="bb000020-0003-0003-0003-000000000020">
 
         <munit:execution>
-            <munit-tools:set-event doc:id="bb000021-0003-0003-0003-000000000021">
-                <munit-tools:payload
+            <munit:set-event doc:id="bb000021-0003-0003-0003-000000000021">
+                <munit:payload
                     mediaType="application/json"
                     value='#[output application/json --- {cuentaOrigen: "100200300", cuentaDestino: "900800700", bancoDestino: "BAT-0088", monto: 150.75, moneda: "USD", concepto: "", fechaSolicitud: "2026-10-01T14:32:10-06:00"}]'/>
-                <munit-tools:variables>
-                    <munit-tools:variable key="transactionId" value="exp-t3-tx-id"/>
-                    <munit-tools:variable key="idempotencyKey" value="exp-t3-idem-key"/>
-                </munit-tools:variables>
-            </munit-tools:set-event>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-t3-tx-id"/>
+                    <munit:variable key="idempotencyKey" value="exp-t3-idem-key"/>
+                </munit:variables>
+            </munit:set-event>
             <flow-ref name="post-transferencias-experience-impl-sf" doc:id="bb000022-0003-0003-0003-000000000022"/>
         </munit:execution>
 
@@ -156,15 +156,15 @@
                 doc:id="bb000030-0004-0004-0004-000000000030">
 
         <munit:execution>
-            <munit-tools:set-event doc:id="bb000031-0004-0004-0004-000000000031">
-                <munit-tools:payload
+            <munit:set-event doc:id="bb000031-0004-0004-0004-000000000031">
+                <munit:payload
                     mediaType="application/json"
                     value='#[output application/json --- {cuentaDestino: "900800700", bancoDestino: "BAT-0088", monto: 150.75, moneda: "USD", concepto: "Pago de prueba", fechaSolicitud: "2026-10-01T14:32:10-06:00"}]'/>
-                <munit-tools:variables>
-                    <munit-tools:variable key="transactionId" value="exp-t4-tx-id"/>
-                    <munit-tools:variable key="idempotencyKey" value="exp-t4-idem-key"/>
-                </munit-tools:variables>
-            </munit-tools:set-event>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-t4-tx-id"/>
+                    <munit:variable key="idempotencyKey" value="exp-t4-idem-key"/>
+                </munit:variables>
+            </munit:set-event>
             <flow-ref name="post-transferencias-experience-impl-sf" doc:id="bb000032-0004-0004-0004-000000000032"/>
         </munit:execution>
 
@@ -191,15 +191,15 @@
                 doc:id="bb000040-0005-0005-0005-000000000040">
 
         <munit:execution>
-            <munit-tools:set-event doc:id="bb000041-0005-0005-0005-000000000041">
-                <munit-tools:payload
+            <munit:set-event doc:id="bb000041-0005-0005-0005-000000000041">
+                <munit:payload
                     mediaType="application/json"
                     value='#[output application/json --- {cuentaOrigen: "100200300", cuentaDestino: "900800700", bancoDestino: "BAT-0088", monto: 150.75, moneda: "USD", concepto: "Pago de prueba", fechaSolicitud: "2026-10-01"}]'/>
-                <munit-tools:variables>
-                    <munit-tools:variable key="transactionId" value="exp-t5-tx-id"/>
-                    <munit-tools:variable key="idempotencyKey" value="exp-t5-idem-key"/>
-                </munit-tools:variables>
-            </munit-tools:set-event>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-t5-tx-id"/>
+                    <munit:variable key="idempotencyKey" value="exp-t5-idem-key"/>
+                </munit:variables>
+            </munit:set-event>
             <flow-ref name="post-transferencias-experience-impl-sf" doc:id="bb000042-0005-0005-0005-000000000042"/>
         </munit:execution>
 
@@ -238,15 +238,15 @@
         </munit:behavior>
 
         <munit:execution>
-            <munit-tools:set-event doc:id="bb000052-0006-0006-0006-000000000052">
-                <munit-tools:payload
+            <munit:set-event doc:id="bb000052-0006-0006-0006-000000000052">
+                <munit:payload
                     mediaType="application/json"
                     value='#[output application/json --- {cuentaOrigen: "100200300", cuentaDestino: "900800700", bancoDestino: "BAT-0088", monto: 150.75, moneda: "USD", concepto: "Pago de prueba", fechaSolicitud: "2026-10-01T14:32:10-06:00"}]'/>
-                <munit-tools:variables>
-                    <munit-tools:variable key="transactionId" value="exp-t6-tx-id"/>
-                    <munit-tools:variable key="idempotencyKey" value="exp-t6-idem-key"/>
-                </munit-tools:variables>
-            </munit-tools:set-event>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-t6-tx-id"/>
+                    <munit:variable key="idempotencyKey" value="exp-t6-idem-key"/>
+                </munit:variables>
+            </munit:set-event>
             <flow-ref name="post-transferencias-experience-impl-sf" doc:id="bb000053-0006-0006-0006-000000000053"/>
         </munit:execution>
 
@@ -270,15 +270,15 @@
                 doc:id="bb000060-0007-0007-0007-000000000060">
 
         <munit:execution>
-            <munit-tools:set-event doc:id="bb000061-0007-0007-0007-000000000061">
-                <munit-tools:payload
+            <munit:set-event doc:id="bb000061-0007-0007-0007-000000000061">
+                <munit:payload
                     mediaType="application/json"
                     value='#[output application/json --- {cuentaOrigen: "100200300", cuentaDestino: "900800700", bancoDestino: "BAT-0088", monto: 150.75, moneda: "USD", concepto: "Pago de prueba", fechaSolicitud: "2026-10-01T14:32:10-06:00"}]'/>
-                <munit-tools:variables>
-                    <munit-tools:variable key="transactionId" value="exp-t7-tx-id"/>
-                    <munit-tools:variable key="idempotencyKey" value="#['']"/>
-                </munit-tools:variables>
-            </munit-tools:set-event>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-t7-tx-id"/>
+                    <munit:variable key="idempotencyKey" value="#['']"/>
+                </munit:variables>
+            </munit:set-event>
             <flow-ref name="post-transferencias-experience-impl-sf" doc:id="bb000062-0007-0007-0007-000000000062"/>
         </munit:execution>
 
@@ -316,15 +316,15 @@
         </munit:behavior>
 
         <munit:execution>
-            <munit-tools:set-event doc:id="bb000072-0008-0008-0008-000000000072">
-                <munit-tools:payload
+            <munit:set-event doc:id="bb000072-0008-0008-0008-000000000072">
+                <munit:payload
                     mediaType="application/json"
                     value='#[output application/json --- {cuentaOrigen: "100200300", cuentaDestino: "900800700", bancoDestino: "BAT-0088", monto: 150.75, moneda: "USD", concepto: "Pago de prueba", fechaSolicitud: "2026-10-01T14:32:10-06:00"}]'/>
-                <munit-tools:variables>
-                    <munit-tools:variable key="transactionId" value="exp-t8-tx-id"/>
-                    <munit-tools:variable key="idempotencyKey" value="exp-t8-idem-key"/>
-                </munit-tools:variables>
-            </munit-tools:set-event>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-t8-tx-id"/>
+                    <munit:variable key="idempotencyKey" value="exp-t8-idem-key"/>
+                </munit:variables>
+            </munit:set-event>
             <flow-ref name="post-transferencias-experience-impl-sf" doc:id="bb000073-0008-0008-0008-000000000073"/>
         </munit:execution>
 
