@@ -19,7 +19,9 @@ from pathlib import Path
 import yaml
 
 # ── Convenciones del proyecto (ajústalas si tus claves se llaman distinto) ──
-AUTODISCOVERY_KEY = "api.autodiscovery.apiId"
+# Nombre de la clave del id de la instancia de API. Se puede cambiar con la variable de entorno
+# AUTODISCOVERY_KEY (en el pipeline: línea AUTODISCOVERY_KEY=... de .github/pipeline-config.env).
+AUTODISCOVERY_KEY = os.environ.get("AUTODISCOVERY_KEY") or "api.autodiscovery.apiId"
 IDEMPOTENCY_KEY = "idempotency.enabled"
 MIN_COVERAGE = 80
 MIN_PROD_REPLICAS = 2
@@ -37,6 +39,7 @@ PROD_MARK = re.compile(r"(?<![a-z0-9])prod(uction)?(?![a-z0-9])", re.I)
 BIND_VALUES = {"0.0.0.0", "::", "[::]", "localhost", "127.0.0.1"}
 
 errors: list[str] = []
+SOURCES: dict[str, list[str]] = {}   # archivos leídos por ambiente (para los mensajes de error)
 
 
 def err(msg: str, file: str | None = None) -> None:
@@ -129,6 +132,7 @@ def discover_configs(project: Path) -> dict[str, tuple[Path, dict]]:
         m = ENV_FILE.match(path.name)
         if m and path.is_file():
             env = m.group(1).lower()
+            SOURCES.setdefault(env, []).append(path.name)
             data = flatten(yaml.safe_load(path.read_text(encoding="utf-8")) or {})
             if env in found:
                 found[env][1].update(data)
@@ -170,6 +174,8 @@ def check_configs(project: Path, args) -> None:
     # 4) Valores que deben ser distintos entre ambientes (url, host, apiId...)
     declared = [e for e in ENVS if e in configs]
     keys = {k for e in declared for k in configs[e][1] if UNIQUE_KEY.search(k.split(".")[-1])}
+    if args.require_autodiscovery:
+        keys.add(AUTODISCOVERY_KEY)
     for key in sorted(keys - allow_same):
         seen: dict[str, str] = {}
         for env in declared:
@@ -186,7 +192,10 @@ def check_configs(project: Path, args) -> None:
     for env in declared if args.require_autodiscovery else []:
         value = configs[env][1].get(AUTODISCOVERY_KEY)
         if value is None or str(value).strip() == "":
-            err(f"Falta {AUTODISCOVERY_KEY} en {env}", str(configs[env][0]))
+            similar = sorted(k for k in configs[env][1] if re.search(r"api|autodiscovery", k, re.I))
+            hint = (f" Archivos leídos: {', '.join(SOURCES.get(env, []))}. "
+                    f"Claves con 'api' o 'autodiscovery' que sí encontré: {', '.join(similar) or 'ninguna'}.")
+            err(f"Falta {AUTODISCOVERY_KEY} en {env} (o está vacía).{hint}", str(configs[env][0]))
 
     # 6) Idempotencia obligatoria (solo en la capa que la implementa)
     if args.require_idempotency:
