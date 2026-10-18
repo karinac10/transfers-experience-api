@@ -11,19 +11,103 @@
         Cubre: connectivity, timeout, errores de negocio TRANSFERENCIA:* y catch-all.
     -->
     <error-handler name="global-error-handler">
-		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="dfc553a5-863f-4710-8fb7-9e78123acc9d" type="ANY">
-			<ee:transform doc:name="Error Payload" doc:id="ae15a380-163c-4e1f-ada6-879d40fdccb0" >
-				<ee:message >
-					<ee:set-payload ><![CDATA[%dw 2.0
+
+        <on-error-propagate type="APP:MISSING_IDEMPOTENCY_KEY" logException="false" doc:name="400 X-Idempotency-Key requerido">
+            <ee:transform>
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
 output application/json
 ---
-payload]]></ee:set-payload>
-				</ee:message>
-			</ee:transform>
-			<logger level="ERROR" doc:name="Error Logger" doc:id="15694d83-8edc-444b-b42b-6925aceee1f5" message="[ERROR] flujo: #[vars.flowVar] para transactionId: #[vars.transactionId]." />
-			<set-variable value="#[vars.httpStatus default attributes.statusCode default 500]" doc:name="Set Variable - httpStatus" doc:id="e358fc6b-ca3f-47d1-b3f9-0c7f5051b366" variableName="httpStatus" />
-		</on-error-propagate>
+{
+  codigo:  "VALIDACION_ERROR",
+  mensaje: "El header X-Idempotency-Key es obligatorio para esta operación.",
+  correlationId: vars.transactionId default "",
+  timestamp:     now() as String {format: "yyyy-MM-dd'T'HH:mm:ssXXX"}
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+        </on-error-propagate>
 
+        <on-error-propagate type="APP:TRANSFER_NOT_FOUND" logException="false" doc:name="404 Transferencia no encontrada">
+            <ee:transform>
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  codigo:    "TRANSFERENCIA_NO_ENCONTRADA",
+  mensaje:   "La transferencia solicitada no fue encontrada.",
+  correlationId: vars.transactionId default "",
+  timestamp:     now() as String {format: "yyyy-MM-dd'T'HH:mm:ssXXX"}
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+        </on-error-propagate>
+
+        <on-error-propagate type="HTTP:CONNECTIVITY" logException="false" doc:name="503 Process API no disponible">
+            <ee:transform>
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  codigo:    "SERVICIO_NO_DISPONIBLE",
+  mensaje:   "El servicio de transferencias no está disponible. Intente más tarde.",
+  correlationId: vars.transactionId default "",
+  timestamp:     now() as String {format: "yyyy-MM-dd'T'HH:mm:ssXXX"}
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">503</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+        </on-error-propagate>
+
+        <on-error-propagate type="HTTP:TIMEOUT" logException="false" doc:name="504 Timeout">
+            <ee:transform>
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  codigo:    "TIMEOUT",
+  mensaje:   "El servicio de transferencias no respondió a tiempo.",
+  correlationId: vars.transactionId default "",
+  timestamp:     now() as String {format: "yyyy-MM-dd'T'HH:mm:ssXXX"}
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">504</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+        </on-error-propagate>
+
+        <on-error-propagate type="ANY" logException="true" doc:name="500 Error inesperado">
+            <logger level="ERROR" doc:name="Log error"
+    message="#[%dw 2.0&#10;        output text/plain&#10;        ---&#10;        '[ERROR] flujo: ' ++&#10;        ((vars.flowVar default 'N/A') as String) ++&#10;        ' | transactionId: ' ++&#10;        ((vars.transactionId default 'N/A') as String) ++&#10;        ' | ' ++&#10;        ((error.description default 'Error al procesar la solicitud de transferencia.') as String)]"/>
+            <ee:transform>
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  codigo:    "ERROR_INTERNO",
+  mensaje:   "Ocurrió un error inesperado. El servicio de transferencias no pudo completar la solicitud.",
+  correlationId: vars.transactionId default "",
+  timestamp:     now() as String {format: "yyyy-MM-dd'T'HH:mm:ssXXX"}
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus"><![CDATA[500]]></ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+        </on-error-propagate>
 
     </error-handler>
 
@@ -47,14 +131,23 @@ else
 				</on-error-propagate>
 			</error-handler>
 		</try>
-		<ee:transform doc:name="transactionId and incomingAttr" doc:id="998ca84e-48cc-4dad-8d60-248de6714d15" >
+		<ee:transform doc:name="transactionId, startTime, idempotencyKey and incomingAttr" doc:id="998ca84e-48cc-4dad-8d60-248de6714d15" >
 			<ee:message />
 			<ee:variables >
 				<ee:set-variable variableName="transactionId" ><![CDATA[%dw 2.0
 output application/java
 ---
+attributes.headers."x-correlation-id" default uuid()]]></ee:set-variable>
+				<ee:set-variable variableName="startTime" ><![CDATA[%dw 2.0
+output application/java
+---
+now() as Number {unit: "milliseconds"}]]></ee:set-variable>
+				<ee:set-variable variableName="idempotencyKey" ><![CDATA[%dw 2.0
+output application/java
+---
 attributes.headers."X-Idempotency-Key"]]></ee:set-variable>
-				<ee:set-variable variableName="incomingAttr" ><![CDATA[output application/json
+				<ee:set-variable variableName="incomingAttr" ><![CDATA[%dw 2.0
+output application/json
 ---
 message.attributes]]></ee:set-variable>
 			</ee:variables>

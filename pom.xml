@@ -81,13 +81,6 @@
 			<classifier>mule-plugin</classifier>
 		</dependency>
 		<dependency>
-			<groupId>c9dbcdc8-e2b1-421f-aeb3-ddbe856d4e2f</groupId>
-			<artifactId>mobile-transfers-experience-api</artifactId>
-			<version>1.0.0</version>
-			<classifier>raml</classifier>
-			<type>zip</type>
-		</dependency>
-		<dependency>
 			<groupId>org.mule.modules</groupId>
 			<artifactId>mule-apikit-module</artifactId>
 			<version>1.12.2</version>
@@ -106,6 +99,13 @@
 			<version>${munit.version}</version>
 			<classifier>mule-plugin</classifier>
 			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>c9dbcdc8-e2b1-421f-aeb3-ddbe856d4e2f</groupId>
+			<artifactId>mobile-transfers-experience-api</artifactId>
+			<version>1.0.1</version>
+			<classifier>raml</classifier>
+			<type>zip</type>
 		</dependency>
 	</dependencies>
 

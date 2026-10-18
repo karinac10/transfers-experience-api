@@ -18,7 +18,7 @@ untilSuccessful:
   retries: "1"
   delay: "2000"
   
-# Connection to the Process API
+# Connection to the Process API 
 process:
   payment-order:
     api:
