@@ -61,7 +61,9 @@ jobs:
           java-version: ${{ vars.JAVA_VERSION || '17' }}
           cache: maven
 
-      # El mule-maven-plugin solo soporta ciertas versiones de Maven: se fija una conocida.
+      # El mule-maven-plugin solo soporta ciertas versiones de Maven (3.9.x según su documentación).
+      # El runner de GitHub actualizó su Maven preinstalado a 3.10.x y el build falla con
+      # NoSuchMethodError en process-sources: por eso se fija una versión conocida.
       - name: Instalar Maven fijo
         run: bash scripts/install-maven.sh
 
@@ -87,7 +89,7 @@ jobs:
       # El .jar que se publica es el mismo que se probó: no se reconstruye después.
       - name: Compilar, MUnit y compuerta de cobertura
         run: |
-          mvn -B -ntp -s .github/maven-settings.xml clean verify \
+          mvn -B -ntp -V -s .github/maven-settings.xml clean verify \
             -Dmule.env=local -Dmule.key="$MULE_KEY"
 
       - name: Verificar artefacto y calcular SHA-256
