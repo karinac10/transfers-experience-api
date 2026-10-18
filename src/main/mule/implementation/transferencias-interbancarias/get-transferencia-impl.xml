@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+
+    <!--
+        GET /transferencias/{id} — Experience API
+        Responsabilidad:
+          1. Llamar a Process API GET /PaymentOrder/{id}/Retrieve
+          2. Traducir estado Process: Completed → APROBADA, Rejected → RECHAZADA
+          3. Propagar 404 de Process como APP:TRANSFER_NOT_FOUND → common.xml lo mapea a 404 con TRANSFERENCIA_NO_ENCONTRADA
+    -->
+
+    <sub-flow name="get-transferencia-experience-impl-sf" doc:id="c3d4e5f6-a7b8-9012-cc33-334567890701">
+
+       <logger level="INFO"
+        doc:name="BEFORE"
+        doc:id="b7fa8571-500a-4c9e-81f9-012aecea9a7a"
+        message="#[%dw 2.0&#10;            output text/plain&#10;            ---&#10;            '[get-transferencia-exp] START - id=' ++&#10;            ((attributes.uriParams.id default 'N/A') as String)]"/>
+
+        <set-variable variableName="transferenciaid"
+            value="#[attributes.uriParams.id]"
+            doc:name="Set transferenciaid"
+            doc:id="e5f6a7b8-c9d0-1234-ee55-556789012703"/>
+
+        <!-- Llamar a Process API Retrieve — 200 si existe, 404 si no -->
+        <try doc:name="Try" doc:id="2d417f81-f1f3-4bad-bea6-ae4ed71648bf" >
+			<http:request method="GET" config-ref="payment-order-process-request-config" path="#['/PaymentOrder/' ++ vars.transferenciaid ++ '/Retrieve']" doc:name="GET Process API /PaymentOrder/{id}/Retrieve" doc:id="f0000001-0001-0001-0001-000000000001" sendCorrelationId="ALWAYS" correlationId="#[vars.transactionId]" responseTimeout="${secure::process.payment-order.api.timeout}">
+            <http:response-validator>
+                <http:success-status-code-validator values="200" />
+            </http:response-validator>
+        </http:request>
+			<error-handler >
+				<on-error-propagate enableNotifications="true" logException="false" doc:name="404 → TRANSFER_NOT_FOUND" doc:id="13d56fa2-69a8-4cb7-ab6d-1e6f3d53f05e" type="HTTP:NOT_FOUND">
+					<raise-error type="APP:TRANSFER_NOT_FOUND" doc:name="Raise: transfer not found" doc:id="f0000003-0003-0003-0003-000000000003"/>
+				</on-error-propagate>
+				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="13d56fa2-69a8-4cb7-ab6d-1e6f3d53f05f" type="HTTP:CONNECTIVITY, HTTP:INTERNAL_SERVER_ERROR">
+				</on-error-propagate>
+			</error-handler>
+		</try>
+
+        <!-- Traducir PaymentOrderProcedure BIAN → respuesta móvil -->
+        <ee:transform doc:name="Translate BIAN order to mobile response" doc:id="f0000002-0002-0002-0002-000000000002">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var pis         = payload.PaymentInstructions.PaymentInstructionStatus
+var statusType  = pis.PaymentInstructionStatusType default "Rejected"
+var statusReason = pis.PaymentInstructionStatus.StatusReason.Text
+var codigoRechazo = if (statusReason == "INSUFFICIENT_FUNDS") "SALDO_INSUFICIENTE" else if (statusReason == "ACCOUNT_BLOCKED") "CUENTA_BLOQUEADA" else null
+---
+{
+  id:    vars.transferenciaid,
+  estado:             if (statusType == "Completed") "APROBADA" else "RECHAZADA",
+  (codigoRechazo:     codigoRechazo) if (statusType != "Completed"),
+  monto:              payload.Amount.AmountValue.Value as Number,
+  moneda:             payload.Amount.AmountCurrency.Currencycode default "USD",
+  cuentaOrigen:       payload.PayerProductInstanceReference.ProductReference.ProductIdentification.ProductIdentification.IdentifierValue.Value,
+  cuentaDestino:      payload.PayeeProductInstanceReference.ProductReference.ProductIdentification.ProductIdentification.IdentifierValue.Value,
+  bancoDestino:       payload.PayeeBankReference.PartyReference.PartyIdentification.PartyIdentification.IdentifierValue.Value,
+  concepto:           upper(payload.RemittanceInformation.Text as String),
+  fechaSolicitud:     payload.Date.DateTimeContent,
+  fechaProcesamiento: pis.PaymentInstructionStatus.StatusDateTime.DateTimeContent
+}]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="httpStatus"><![CDATA[200]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+
+        <logger level="INFO"
+        doc:name="AFTER"
+        doc:id="303d458d-5c8a-4cf7-bf76-66fa55671fc2"
+        message="#[%dw 2.0&#10;            output text/plain&#10;            ---&#10;            '[get-transferencia-exp] END - id=' ++&#10;            ((vars.transferenciaid default 'N/A') as String) ++&#10;            ' | estado=' ++&#10;            ((payload.estado default 'N/A') as String)]"/>
+
+    </sub-flow>
+
+</mule>

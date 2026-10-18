@@ -9,11 +9,7 @@
         http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
 http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/mule/api-gateway/current/mule-api-gateway.xsd">
 
-    <!-- Override at deploy: -Menv=dev|qa|prod  /  -Msecure.key=<32-char-key> -->
 
-    <!-- Propiedades plain — todo el config vive en secure-{env}.yaml -->
-
-    <!-- Soporte para valores cifrados con ![] cuando se requiera en prod -->
     <secure-properties:config
         name="Secure_Properties_Config"
         key="${mule.key}"
@@ -26,13 +22,14 @@ http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/m
         name="payment-order-process-request-config"
         basePath="${secure::process.payment-order.api.basepath}"
         doc:name="Payment Order Process Request Config"
+        sendCorrelationId="ALWAYS"
         responseTimeout="${secure::process.payment-order.api.timeout}">
         <http:request-connection
             host="${secure::process.payment-order.api.host}"
             port="${secure::process.payment-order.api.port}"
             protocol="${secure::process.payment-order.api.protocol}"/>
     </http:request-config>
-	<api-gateway:autodiscovery apiId="${secure::api.id}" ignoreBasePath="true" doc:name="API Autodiscovery" doc:id="43de2c9b-b4d8-4137-8096-5061701a5d69" flowRef="mobile-transfers-experience-api-main"/>
 
+	<api-gateway:autodiscovery apiId="${secure::api.id}" ignoreBasePath="true" doc:name="API Autodiscovery" doc:id="43de2c9b-b4d8-4137-8096-5061701a5d69" flowRef="mobile-transfers-experience-api-main"/>
 
 </mule>

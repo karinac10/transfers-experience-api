@@ -11,7 +11,7 @@ https:
 
 #API AutoDiscovery
 api:
-  id: ""
+  id: "21241923"
 
 # Until Successful
 untilSuccessful:
@@ -22,9 +22,9 @@ untilSuccessful:
 process:
   payment-order:
     api:
-      protocol: "HTTP"
-      host: "localhost"
-      port: "8082"
+      protocol: "HTTPS"
+      host: "" #pendiente
+      port: "443"
       timeout: "240000"
       basepath: "/payment-order"
       paymentOrderInitiate: "/PaymentOrder/Initiate"

@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+      xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+        http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd
+        http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+
+    <munit:config name="post-transferencias-suite" doc:id="bb000001-0001-0001-0001-000000000001"/>
+
+    <!-- T1: happy path 201 -->
+    <munit:test name="exp-post-t1-happy-path-201"
+                description="POST transferencias: Process responde Completed → 201 APROBADA con id de orden"
+                doc:id="bb000002-0001-0001-0001-000000000002">
+        <munit:behavior>
+            <munit-tools:mock-when processor="http:request" doc:id="bb000003-0001-0001-0001-000000000003">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute attributeName="doc:name" whereValue="POST Process API /PaymentOrder/Initiate"/>
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload
+                        mediaType="application/json"
+                        value='#[output application/json --- {PayerProductInstanceReference: {ProductReference: {ProductIdentification: {ProductIdentification: {IdentifierValue: {Value: "100200300"}}}}}, PayeeProductInstanceReference: {ProductReference: {ProductIdentification: {ProductIdentification: {IdentifierValue: {Value: "900800700"}}}}}, PayeeBankReference: {PartyReference: {PartyIdentification: {PartyIdentification: {IdentifierValue: {Value: "BAT-0088"}}}}}, Amount: {AmountValue: {Value: "150.75"}, AmountCurrency: {Currencycode: "USD"}}, Currency: {Currencycode: "USD"}, DateType: "Creationdate", Date: {DateTimeContent: "2026-10-01T14:32:10-06:00"}, PaymentMechanismType: "ACH", PaymentInstructions: {PaymentInstructionType: "Domesticpayment", PaymentInstructionStatus: {PaymentInstructionStatusType: "Completed", PaymentInstructionStatus: {StatusDateTime: {DateTimeContent: "2026-10-18T20:00:00Z"}}}}, RemittanceInformation: {Text: "Pago de prueba"}}]'/>
+                    <munit-tools:attributes
+                        value='#[output application/java --- {statusCode: 200, headers: {"X-Payment-Order-Id": "test-order-e2e-uuid-001", "Location": "/payment-order/PaymentOrder/test-order-e2e-uuid-001/Retrieve"}}]'/>
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <munit:set-event doc:id="bb000004-0001-0001-0001-000000000004">
+                <munit:payload
+                    mediaType="application/json"
+                    value='#[output application/json --- {cuentaOrigen: "100200300", cuentaDestino: "900800700", bancoDestino: "BAT-0088", monto: 150.75, moneda: "USD", concepto: "Pago de prueba", fechaSolicitud: "2026-10-01T14:32:10-06:00"}]'/>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-t1-tx-id"/>
+                    <munit:variable key="idempotencyKey" value="exp-t1-idem-key"/>
+                </munit:variables>
+            </munit:set-event>
+            <flow-ref name="post-transferencias-experience-impl-sf" doc:id="bb000005-0001-0001-0001-000000000005"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:id="bb000006-0001-0001-0001-000000000006"
+                expression="#[vars.httpStatus]"
+                is="#[MunitTools::equalTo(201)]"
+                message="httpStatus debe ser 201"/>
+            <munit-tools:assert-that doc:id="bb000007-0001-0001-0001-000000000007"
+                expression="#[payload.id]"
+                is="#[MunitTools::equalTo('test-order-e2e-uuid-001')]"
+                message="payload.id debe ser el X-Payment-Order-Id del header"/>
+            <munit-tools:assert-that doc:id="bb000008-0001-0001-0001-000000000008"
+                expression="#[payload.estado]"
+                is="#[MunitTools::equalTo('APROBADA')]"
+                message="payload.estado debe ser APROBADA"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- T2: monto negativo 400 -->
+    <munit:test name="exp-post-t2-monto-negativo-400"
+                description="POST transferencias: monto negativo → 400 VALIDACION_ERROR sin llamar Process API"
+                doc:id="bb000010-0002-0002-0002-000000000010">
+        <munit:behavior/>
+        <munit:execution>
+            <munit:set-event doc:id="bb000011-0002-0002-0002-000000000011">
+                <munit:payload
+                    mediaType="application/json"
+                    value='#[output application/json --- {cuentaOrigen: "100200300", cuentaDestino: "900800700", bancoDestino: "BAT-0088", monto: -100.00, moneda: "USD", concepto: "Pago de prueba", fechaSolicitud: "2026-10-01T14:32:10-06:00"}]'/>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-t2-tx-id"/>
+                    <munit:variable key="idempotencyKey" value="exp-t2-idem-key"/>
+                </munit:variables>
+            </munit:set-event>
+            <flow-ref name="post-transferencias-experience-impl-sf" doc:id="bb000012-0002-0002-0002-000000000012"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:id="bb000013-0002-0002-0002-000000000013"
+                expression="#[vars.httpStatus]"
+                is="#[MunitTools::equalTo(400)]"
+                message="httpStatus debe ser 400"/>
+            <munit-tools:assert-that doc:id="bb000014-0002-0002-0002-000000000014"
+                expression="#[payload.codigo]"
+                is="#[MunitTools::equalTo('VALIDACION_ERROR')]"
+                message="payload.codigo debe ser VALIDACION_ERROR"/>
+            <munit-tools:verify-call doc:id="bb000015-0002-0002-0002-000000000015"
+                processor="http:request"
+                times="0"
+                message="Process API NO debe ser llamada cuando la validacion falla">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute attributeName="doc:name" whereValue="POST Process API /PaymentOrder/Initiate"/>
+                </munit-tools:with-attributes>
+            </munit-tools:verify-call>
+        </munit:validation>
+    </munit:test>
+
+    <!-- T3: concepto vacío 400 -->
+    <munit:test name="exp-post-t3-concepto-vacio-400"
+                description="POST transferencias: concepto vacio → 400 VALIDACION_ERROR"
+                doc:id="bb000020-0003-0003-0003-000000000020">
+        <munit:behavior/>
+        <munit:execution>
+            <munit:set-event doc:id="bb000021-0003-0003-0003-000000000021">
+                <munit:payload
+                    mediaType="application/json"
+                    value='#[output application/json --- {cuentaOrigen: "100200300", cuentaDestino: "900800700", bancoDestino: "BAT-0088", monto: 150.75, moneda: "USD", concepto: "", fechaSolicitud: "2026-10-01T14:32:10-06:00"}]'/>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-t3-tx-id"/>
+                    <munit:variable key="idempotencyKey" value="exp-t3-idem-key"/>
+                </munit:variables>
+            </munit:set-event>
+            <flow-ref name="post-transferencias-experience-impl-sf" doc:id="bb000022-0003-0003-0003-000000000022"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:id="bb000023-0003-0003-0003-000000000023"
+                expression="#[vars.httpStatus]"
+                is="#[MunitTools::equalTo(400)]"
+                message="httpStatus debe ser 400"/>
+            <munit-tools:assert-that doc:id="bb000024-0003-0003-0003-000000000024"
+                expression="#[payload.codigo]"
+                is="#[MunitTools::equalTo('VALIDACION_ERROR')]"
+                message="payload.codigo debe ser VALIDACION_ERROR"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- T4: cuentaOrigen faltante 400 -->
+    <munit:test name="exp-post-t4-cuenta-origen-faltante-400"
+                description="POST transferencias: cuentaOrigen ausente → 400 VALIDACION_ERROR"
+                doc:id="bb000030-0004-0004-0004-000000000030">
+        <munit:behavior/>
+        <munit:execution>
+            <munit:set-event doc:id="bb000031-0004-0004-0004-000000000031">
+                <munit:payload
+                    mediaType="application/json"
+                    value='#[output application/json --- {cuentaDestino: "900800700", bancoDestino: "BAT-0088", monto: 150.75, moneda: "USD", concepto: "Pago de prueba", fechaSolicitud: "2026-10-01T14:32:10-06:00"}]'/>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-t4-tx-id"/>
+                    <munit:variable key="idempotencyKey" value="exp-t4-idem-key"/>
+                </munit:variables>
+            </munit:set-event>
+            <flow-ref name="post-transferencias-experience-impl-sf" doc:id="bb000032-0004-0004-0004-000000000032"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:id="bb000033-0004-0004-0004-000000000033"
+                expression="#[vars.httpStatus]"
+                is="#[MunitTools::equalTo(400)]"
+                message="httpStatus debe ser 400"/>
+            <munit-tools:assert-that doc:id="bb000034-0004-0004-0004-000000000034"
+                expression="#[payload.codigo]"
+                is="#[MunitTools::equalTo('VALIDACION_ERROR')]"
+                message="payload.codigo debe ser VALIDACION_ERROR"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- T5: fechaSolicitud sin timezone 400 -->
+    <munit:test name="exp-post-t5-fecha-formato-invalido-400"
+                description="POST transferencias: fechaSolicitud sin hora ni timezone → 400 VALIDACION_ERROR"
+                doc:id="bb000040-0005-0005-0005-000000000040">
+        <munit:behavior/>
+        <munit:execution>
+            <munit:set-event doc:id="bb000041-0005-0005-0005-000000000041">
+                <munit:payload
+                    mediaType="application/json"
+                    value='#[output application/json --- {cuentaOrigen: "100200300", cuentaDestino: "900800700", bancoDestino: "BAT-0088", monto: 150.75, moneda: "USD", concepto: "Pago de prueba", fechaSolicitud: "2026-10-01"}]'/>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-t5-tx-id"/>
+                    <munit:variable key="idempotencyKey" value="exp-t5-idem-key"/>
+                </munit:variables>
+            </munit:set-event>
+            <flow-ref name="post-transferencias-experience-impl-sf" doc:id="bb000042-0005-0005-0005-000000000042"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:id="bb000043-0005-0005-0005-000000000043"
+                expression="#[vars.httpStatus]"
+                is="#[MunitTools::equalTo(400)]"
+                message="httpStatus debe ser 400"/>
+            <munit-tools:assert-that doc:id="bb000044-0005-0005-0005-000000000044"
+                expression="#[payload.codigo]"
+                is="#[MunitTools::equalTo('VALIDACION_ERROR')]"
+                message="payload.codigo debe ser VALIDACION_ERROR"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- T6: Process caído HTTP:CONNECTIVITY -->
+    <munit:test name="exp-post-t6-process-caido-503"
+                description="POST transferencias: Process API no disponible → HTTP:CONNECTIVITY se propaga"
+                expectedErrorType="HTTP:CONNECTIVITY"
+                doc:id="bb000050-0006-0006-0006-000000000050">
+        <munit:behavior>
+            <munit-tools:mock-when processor="http:request" doc:id="bb000051-0006-0006-0006-000000000051">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute attributeName="doc:name" whereValue="POST Process API /PaymentOrder/Initiate"/>
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:error typeId="HTTP:CONNECTIVITY"/>
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <munit:set-event doc:id="bb000052-0006-0006-0006-000000000052">
+                <munit:payload
+                    mediaType="application/json"
+                    value='#[output application/json --- {cuentaOrigen: "100200300", cuentaDestino: "900800700", bancoDestino: "BAT-0088", monto: 150.75, moneda: "USD", concepto: "Pago de prueba", fechaSolicitud: "2026-10-01T14:32:10-06:00"}]'/>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-t6-tx-id"/>
+                    <munit:variable key="idempotencyKey" value="exp-t6-idem-key"/>
+                </munit:variables>
+            </munit:set-event>
+            <flow-ref name="post-transferencias-experience-impl-sf" doc:id="bb000053-0006-0006-0006-000000000053"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:id="bb000054-0006-0006-0006-000000000054"
+                expression="#[true]"
+                is="#[MunitTools::equalTo(true)]"
+                message="HTTP:CONNECTIVITY fue propagado correctamente"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- T7: X-Idempotency-Key ausente -->
+    <munit:test name="exp-post-t7-missing-idempotency-key"
+                description="POST transferencias: X-Idempotency-Key ausente → APP:MISSING_IDEMPOTENCY_KEY"
+                expectedErrorType="APP:MISSING_IDEMPOTENCY_KEY"
+                doc:id="bb000060-0007-0007-0007-000000000060">
+        <munit:behavior/>
+        <munit:execution>
+            <munit:set-event doc:id="bb000061-0007-0007-0007-000000000061">
+                <munit:payload
+                    mediaType="application/json"
+                    value='#[output application/json --- {cuentaOrigen: "100200300", cuentaDestino: "900800700", bancoDestino: "BAT-0088", monto: 150.75, moneda: "USD", concepto: "Pago de prueba", fechaSolicitud: "2026-10-01T14:32:10-06:00"}]'/>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-t7-tx-id"/>
+                    <munit:variable key="idempotencyKey" value="#['']"/>
+                </munit:variables>
+            </munit:set-event>
+            <flow-ref name="post-transferencias-experience-impl-sf" doc:id="bb000062-0007-0007-0007-000000000062"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:id="bb000063-0007-0007-0007-000000000063"
+                expression="#[true]"
+                is="#[MunitTools::equalTo(true)]"
+                message="APP:MISSING_IDEMPOTENCY_KEY fue lanzado correctamente"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- T8: Rejected 422 SALDO_INSUFICIENTE -->
+    <munit:test name="exp-post-t8-rejected-422"
+                description="POST transferencias: Process responde Rejected INSUFFICIENT_FUNDS → 422 SALDO_INSUFICIENTE"
+                doc:id="bb000070-0008-0008-0008-000000000070">
+        <munit:behavior>
+            <munit-tools:mock-when processor="http:request" doc:id="bb000071-0008-0008-0008-000000000071">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute attributeName="doc:name" whereValue="POST Process API /PaymentOrder/Initiate"/>
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload
+                        mediaType="application/json"
+                        value='#[output application/json --- {PayerProductInstanceReference: {ProductReference: {ProductIdentification: {ProductIdentification: {IdentifierValue: {Value: "100200300"}}}}}, PayeeProductInstanceReference: {ProductReference: {ProductIdentification: {ProductIdentification: {IdentifierValue: {Value: "900800700"}}}}}, PayeeBankReference: {PartyReference: {PartyIdentification: {PartyIdentification: {IdentifierValue: {Value: "BAT-0088"}}}}}, Amount: {AmountValue: {Value: "150.75"}, AmountCurrency: {Currencycode: "USD"}}, Currency: {Currencycode: "USD"}, DateType: "Creationdate", Date: {DateTimeContent: "2026-10-01T14:32:10-06:00"}, PaymentMechanismType: "ACH", PaymentInstructions: {PaymentInstructionType: "Domesticpayment", PaymentInstructionStatus: {PaymentInstructionStatusType: "Rejected", PaymentInstructionStatus: {StatusReason: {Text: "INSUFFICIENT_FUNDS"}, StatusDateTime: {DateTimeContent: "2026-10-18T20:00:00Z"}}}}, RemittanceInformation: {Text: "Pago de prueba"}}]'/>
+                    <munit-tools:attributes
+                        value='#[output application/java --- {statusCode: 200, headers: {"X-Payment-Order-Id": "test-order-e2e-uuid-001", "Location": "/payment-order/PaymentOrder/test-order-e2e-uuid-001/Retrieve"}}]'/>
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <munit:set-event doc:id="bb000072-0008-0008-0008-000000000072">
+                <munit:payload
+                    mediaType="application/json"
+                    value='#[output application/json --- {cuentaOrigen: "100200300", cuentaDestino: "900800700", bancoDestino: "BAT-0088", monto: 150.75, moneda: "USD", concepto: "Pago de prueba", fechaSolicitud: "2026-10-01T14:32:10-06:00"}]'/>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-t8-tx-id"/>
+                    <munit:variable key="idempotencyKey" value="exp-t8-idem-key"/>
+                </munit:variables>
+            </munit:set-event>
+            <flow-ref name="post-transferencias-experience-impl-sf" doc:id="bb000073-0008-0008-0008-000000000073"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:id="bb000074-0008-0008-0008-000000000074"
+                expression="#[vars.httpStatus]"
+                is="#[MunitTools::equalTo(422)]"
+                message="httpStatus debe ser 422"/>
+            <munit-tools:assert-that doc:id="bb000075-0008-0008-0008-000000000075"
+                expression="#[payload.codigo]"
+                is="#[MunitTools::equalTo('SALDO_INSUFICIENTE')]"
+                message="payload.codigo debe ser SALDO_INSUFICIENTE"/>
+        </munit:validation>
+    </munit:test>
+
+</mule>

@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+
+    <!--
+        POST /transferencias — Experience API
+        Responsabilidad:
+          1. Validar X-Idempotency-Key presente
+          2. Generar X-Correlation-Id si el caller no lo envió
+          3. Mapear modelo móvil → modelo BIAN (monto número→string, anidación, RemittanceInformation)
+          4. Llamar a Process API POST /PaymentOrder/Initiate (acepta 200)
+          5. Traducir respuesta de Process:
+               Completed → 201 Created + Location: /transferencias/{orderId}
+               Rejected  → 422 con codigo SALDO_INSUFICIENTE o CUENTA_BLOQUEADA + transferenciaId
+          6. 503 y 409 de Process se propagan hacia el cliente via error handler
+
+        NO realiza idempotencia ni conoce el core bancario.
+    -->
+
+    <sub-flow name="post-transferencias-experience-impl-sf" doc:id="b1c2d3e4-f5a6-7890-bb11-223456789601">
+
+        <logger level="INFO"
+        doc:name="BEFORE"
+        doc:id="89d0fa00-93cd-4e3d-bbc8-311fc816efed"
+        message="#[%dw 2.0&#10;            output text/plain&#10;            ---&#10;            '[post-transferencias-exp] START - transactionId=' ++&#10;            ((vars.transactionId default '') as String) ++&#10;            ' | correlationId=' ++&#10;            ((correlationId default '') as String)]"/>
+
+        <!-- 1. Validar X-Idempotency-Key -->
+        <choice doc:name="Validate X-Idempotency-Key" doc:id="d3e4f5a6-b7c8-9012-dd33-445678901603">
+            <when expression="#[isEmpty(vars.idempotencyKey default '')]">
+                <raise-error type="APP:MISSING_IDEMPOTENCY_KEY"
+                    doc:name="Raise: missing idempotency key"
+                    doc:id="e4f5a6b7-c8d9-0123-ee44-556789012604"/>
+            </when>
+            <otherwise>
+                <logger level="DEBUG"
+        doc:name="X-Idempotency-Key present"
+        doc:id="e7c39083-2e2d-4dac-b593-dcda5efcbe4d"
+        message="#[%dw 2.0&#10;            output text/plain&#10;            ---&#10;            '[post-transferencias-exp] idempotencyKey=' ++&#10;            ((vars.idempotencyKey default '') as String)]"/>
+            </otherwise>
+        </choice>
+
+        <!-- 2. Generar X-Correlation-Id si no lo envió el caller -->
+        <set-variable variableName="correlationIdOut"
+            value="#[attributes.headers.'X-Correlation-Id' default uuid()]"
+            doc:name="X-Correlation-Id (generate if absent)"
+            doc:id="e0000001-0001-0001-0001-000000000001"/>
+        <!-- 3. Validar request antes del mapeo BIAN -->
+<ee:transform doc:name="Validar solicitud de transferencia">
+    <ee:variables>
+        <ee:set-variable variableName="validationResult"><![CDATA[%dw 2.0
+import validarSolicitud from modules::validadorSolicitud
+output application/java
+---
+validarSolicitud(
+    payload,
+    vars.transactionId default ""
+)
+]]></ee:set-variable>
+				<ee:set-variable variableName="initialPayload" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+    
+</ee:variables>
+</ee:transform>
+
+<choice doc:name="Evaluar validación de transferencia">
+
+    <!-- Solicitud inválida -->
+    <when expression="#[vars.validationResult != null]">
+        <ee:transform doc:name="Responder error de validación">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars.validationResult]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+    </when>
+
+    <!-- Solicitud válida -->
+    <otherwise>
+				<ee:transform doc:name="Map mobile → BIAN PaymentOrderInitiation" doc:id="e0000002-0002-0002-0002-000000000002">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  PayerProductInstanceReference: {
+    ProductReference: {
+      ProductIdentification: {
+        ProductIdentification: {
+          IdentifierValue: { Value: payload.cuentaOrigen }
+        }
+      }
+    }
+  },
+  PayeeProductInstanceReference: {
+    ProductReference: {
+      ProductIdentification: {
+        ProductIdentification: {
+          IdentifierValue: { Value: payload.cuentaDestino }
+        }
+      }
+    }
+  },
+  PayeeBankReference: {
+    PartyReference: {
+      PartyIdentification: {
+        PartyIdentification: {
+          IdentifierValue: { Value: payload.bancoDestino }
+        }
+      }
+    }
+  },
+  Amount: {
+    AmountValue:    { Value: payload.monto as String },
+    AmountCurrency: { Currencycode: payload.moneda default "USD" }
+  },
+  Currency:              { Currencycode: payload.moneda default "USD" },
+  DateType:              "Creationdate",
+  Date:                  { DateTimeContent: payload.fechaSolicitud },
+  PaymentMechanismType:  "ACH",
+  PaymentInstructions:   { PaymentInstructionType: "Domesticpayment" },
+  RemittanceInformation: { Text: payload.concepto }
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+				<try doc:name="Try" doc:id="3fb18a21-fa7c-4e13-948c-463aa5fad1a0">
+			<http:request method="POST" config-ref="payment-order-process-request-config" path="${secure::process.payment-order.api.paymentOrderInitiate}" doc:name="POST Process API /PaymentOrder/Initiate" doc:id="a6b7c8d9-e0f1-2345-aa66-778901234606" sendCorrelationId="ALWAYS" correlationId="#[vars.transactionId]" responseTimeout="${secure::process.payment-order.api.timeout}">
+            <http:headers><![CDATA[#[{
+    'X-Idempotency-Key': vars.idempotencyKey default '',
+    'x-correlation-id':  vars.transactionId default '',
+    'Content-Type':      'application/json'
+}]]]></http:headers>
+            <http:response-validator>
+                <http:success-status-code-validator values="200..499" />
+            </http:response-validator>
+        </http:request>
+			<error-handler>
+				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="4bbcbcb9-2c13-4330-afb7-1bc8b634e2e9" type="HTTP:CONNECTIVITY, HTTP:INTERNAL_SERVER_ERROR" >
+						</on-error-propagate>
+			</error-handler>
+		</try>
+				<choice doc:name="Completed or Rejected?" doc:id="e0000003-0003-0003-0003-000000000003">
+            <!-- 409 de Process (idempotency conflict): pasar tal cual al cliente -->
+            <when expression="#[attributes.statusCode == 409]">
+                <ee:transform doc:name="409 Idempotency Conflict" doc:id="e0000006-0006-0006-0006-000000000006">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  codigo:        "IDEMPOTENCY_CONFLICT",
+  mensaje:       "La clave X-Idempotency-Key ya fue utilizada con un cuerpo de solicitud diferente.",
+  correlationId: vars.transactionId default "",
+  timestamp:     now() as String {format: "yyyy-MM-dd'T'HH:mm:ssXXX"}
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">409</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </when>
+            <when expression="#[payload.PaymentInstructions.PaymentInstructionStatus.PaymentInstructionStatusType == 'Completed']">
+                <ee:transform doc:name="201 Created — APROBADA" doc:id="e0000004-0004-0004-0004-000000000004">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  id: attributes.headers.'X-Payment-Order-Id',
+  cuentaOrigen: vars.initialPayload.cuentaOrigen,
+  cuentaDestino: vars.initialPayload.cuentaDestino,
+  bancoDestino: vars.initialPayload.bancoDestino,
+  monto: vars.initialPayload.monto,
+  moneda: vars.initialPayload.moneda,
+  concepto: vars.initialPayload.concepto,
+  estado:          "APROBADA",
+  fechaSolicitud: vars.initialPayload.fechaSolicitud,
+  fechaProcesamiento: now() as String {format: "yyyy-MM-dd'T'HH:mm:ssXXX"}
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus"><![CDATA[201]]></ee:set-variable>
+                        <ee:set-variable variableName="locationHeader"><![CDATA[#['/transferencias/' ++ attributes.headers.'X-Payment-Order-Id']]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </when>
+            <otherwise>
+                <!-- Rejected: 422 — mapear StatusReason BIAN a código BDA -->
+                <ee:transform doc:name="422 Rejected" doc:id="e0000005-0005-0005-0005-000000000005">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var statusReason = payload.PaymentInstructions.PaymentInstructionStatus.PaymentInstructionStatus.StatusReason.Text default "INSUFFICIENT_FUNDS"
+var codigoRechazo = if (statusReason == "INSUFFICIENT_FUNDS") "SALDO_INSUFICIENTE" else "CUENTA_BLOQUEADA"
+var mensajeRechazo = if (statusReason == "INSUFFICIENT_FUNDS") "La transferencia fue rechazada por saldo insuficiente." else "La transferencia fue rechazada porque la cuenta de destino está bloqueada."
+---
+{
+  codigo:        codigoRechazo,
+  mensaje:       mensajeRechazo,
+  correlationId: vars.transactionId default "",
+  timestamp:     now() as String {format: "yyyy-MM-dd'T'HH:mm:ssXXX"}
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">422</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </otherwise>
+        </choice>
+				<logger level="INFO"
+        doc:name="AFTER"
+        doc:id="4430426f-425c-4938-bd07-50fa2ba9b1e4"
+        message="#[%dw 2.0&#10;            output text/plain&#10;            ---&#10;            '[post-transferencias-exp] END - transactionId=' ++&#10;            ((vars.transactionId default '') as String) ++&#10;            ' | httpStatus=' ++&#10;            ((vars.httpStatus default 201) as String)]"/>
+    
+</otherwise>
+
+</choice>
+
+
+    </sub-flow>
+
+</mule>

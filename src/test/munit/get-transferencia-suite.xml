@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+      xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+        http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd
+        http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+
+    <munit:config name="get-transferencia-suite" doc:id="cc000001-0001-0001-0001-000000000001"/>
+
+    <!-- T1: GET transferencia existente 200 -->
+    <munit:test name="exp-get-t1-existente-200"
+                description="GET transferencia existente: Process responde Completed → 200 con datos completos"
+                doc:id="cc000002-0001-0001-0001-000000000002">
+        <munit:behavior>
+            <munit-tools:mock-when processor="http:request" doc:id="cc000003-0001-0001-0001-000000000003">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute attributeName="doc:name" whereValue="GET Process API /PaymentOrder/{id}/Retrieve"/>
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:payload
+                        mediaType="application/json"
+                        value='#[output application/json --- {PayerProductInstanceReference: {ProductReference: {ProductIdentification: {ProductIdentification: {IdentifierValue: {Value: "100200300"}}}}}, PayeeProductInstanceReference: {ProductReference: {ProductIdentification: {ProductIdentification: {IdentifierValue: {Value: "900800700"}}}}}, PayeeBankReference: {PartyReference: {PartyIdentification: {PartyIdentification: {IdentifierValue: {Value: "BAT-0088"}}}}}, Amount: {AmountValue: {Value: "150.75"}, AmountCurrency: {Currencycode: "USD"}}, Currency: {Currencycode: "USD"}, DateType: "Creationdate", Date: {DateTimeContent: "2026-10-01T14:32:10-06:00"}, PaymentMechanismType: "ACH", PaymentInstructions: {PaymentInstructionType: "Domesticpayment", PaymentInstructionStatus: {PaymentInstructionStatusType: "Completed", PaymentInstructionStatus: {StatusDateTime: {DateTimeContent: "2026-10-18T20:00:00Z"}}}}, RemittanceInformation: {Text: "Pago de prueba"}}]'/>
+                    <munit-tools:attributes
+                        value='#[output application/java --- {statusCode: 200, headers: {}}]'/>
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <munit:set-event doc:id="cc000004-0001-0001-0001-000000000004">
+                <munit:payload mediaType="application/json" value="#[{}]"/>
+                <munit:attributes
+                    value='#[output application/java --- {uriParams: {id: "test-order-e2e-uuid-001"}, method: "GET", headers: {}, requestPath: "/api/v1/transferencias/test-order-e2e-uuid-001", requestUri: "/api/v1/transferencias/test-order-e2e-uuid-001"}]'/>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-get-t1-tx-id"/>
+                </munit:variables>
+            </munit:set-event>
+            <flow-ref name="get-transferencia-experience-impl-sf" doc:id="cc000005-0001-0001-0001-000000000005"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:id="cc000006-0001-0001-0001-000000000006"
+                expression="#[vars.httpStatus]"
+                is="#[MunitTools::equalTo(200)]"
+                message="httpStatus debe ser 200"/>
+            <munit-tools:assert-that doc:id="cc000007-0001-0001-0001-000000000007"
+                expression="#[payload.id]"
+                is="#[MunitTools::equalTo('test-order-e2e-uuid-001')]"
+                message="id debe coincidir con el uriParam id"/>
+            <munit-tools:assert-that doc:id="cc000008-0001-0001-0001-000000000008"
+                expression="#[payload.estado]"
+                is="#[MunitTools::equalTo('APROBADA')]"
+                message="estado debe ser APROBADA para Completed"/>
+            <munit-tools:assert-that doc:id="cc000009-0001-0001-0001-000000000009"
+                expression="#[payload.monto as String]"
+                is="#[MunitTools::equalTo('150.75')]"
+                message="monto debe ser 150.75"/>
+            <munit-tools:assert-that doc:id="cc00000a-0001-0001-0001-000000000010"
+                expression="#[payload.concepto]"
+                is="#[MunitTools::equalTo('PAGO DE PRUEBA')]"
+                message="concepto debe ser uppercase de RemittanceInformation.Text"/>
+        </munit:validation>
+    </munit:test>
+
+    <!-- T2: GET transferencia inexistente 404 -->
+    <munit:test name="exp-get-t2-inexistente-404"
+                description="GET transferencia inexistente: Process lanza HTTP:NOT_FOUND → sub-flow relanza APP:TRANSFER_NOT_FOUND"
+                expectedErrorType="APP:TRANSFER_NOT_FOUND"
+                doc:id="cc000010-0002-0002-0002-000000000010">
+        <munit:behavior>
+            <munit-tools:mock-when processor="http:request" doc:id="cc000011-0002-0002-0002-000000000011">
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute attributeName="doc:name" whereValue="GET Process API /PaymentOrder/{id}/Retrieve"/>
+                </munit-tools:with-attributes>
+                <munit-tools:then-return>
+                    <munit-tools:error typeId="HTTP:NOT_FOUND"/>
+                </munit-tools:then-return>
+            </munit-tools:mock-when>
+        </munit:behavior>
+        <munit:execution>
+            <munit:set-event doc:id="cc000012-0002-0002-0002-000000000012">
+                <munit:payload mediaType="application/json" value="#[{}]"/>
+                <munit:attributes
+                    value='#[output application/java --- {uriParams: {id: "orden-inexistente-999"}, method: "GET", headers: {}, requestPath: "/api/v1/transferencias/orden-inexistente-999", requestUri: "/api/v1/transferencias/orden-inexistente-999"}]'/>
+                <munit:variables>
+                    <munit:variable key="transactionId" value="exp-get-t2-tx-id"/>
+                </munit:variables>
+            </munit:set-event>
+            <flow-ref name="get-transferencia-experience-impl-sf" doc:id="cc000013-0002-0002-0002-000000000013"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that doc:id="cc000014-0002-0002-0002-000000000014"
+                expression="#[true]"
+                is="#[MunitTools::equalTo(true)]"
+                message="APP:TRANSFER_NOT_FOUND fue propagado correctamente"/>
+        </munit:validation>
+    </munit:test>
+
+</mule>

@@ -14,7 +14,7 @@
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 		<app.runtime>4.12.2</app.runtime>
 		<mule.maven.plugin.version>4.10.1</mule.maven.plugin.version>
-		<munit.version>3.3.0</munit.version>
+		<munit.version>3.6.3</munit.version>
 	</properties>
 
 	<build>
@@ -45,6 +45,10 @@
 					</execution>
 				</executions>
 				<configuration>
+					<systemPropertyVariables>
+						<mule.env>local</mule.env>
+						<mule.key>1234567890ABCDEF1234567890ABCDEF</mule.key>
+					</systemPropertyVariables>
 					<coverage>
 						<runCoverage>true</runCoverage>
 						<failBuild>true</failBuild>
@@ -81,13 +85,6 @@
 			<classifier>mule-plugin</classifier>
 		</dependency>
 		<dependency>
-			<groupId>c9dbcdc8-e2b1-421f-aeb3-ddbe856d4e2f</groupId>
-			<artifactId>mobile-transfers-experience-api</artifactId>
-			<version>1.0.0</version>
-			<classifier>raml</classifier>
-			<type>zip</type>
-		</dependency>
-		<dependency>
 			<groupId>org.mule.modules</groupId>
 			<artifactId>mule-apikit-module</artifactId>
 			<version>1.12.2</version>
@@ -106,6 +103,13 @@
 			<version>${munit.version}</version>
 			<classifier>mule-plugin</classifier>
 			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>c9dbcdc8-e2b1-421f-aeb3-ddbe856d4e2f</groupId>
+			<artifactId>mobile-transfers-experience-api</artifactId>
+			<version>1.0.1</version>
+			<classifier>raml</classifier>
+			<type>zip</type>
 		</dependency>
 	</dependencies>
 
