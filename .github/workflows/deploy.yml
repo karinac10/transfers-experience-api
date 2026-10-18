@@ -1,0 +1,172 @@
+name: Deploy (reutilizable)
+
+# Despliega una release YA publicada (vX.Y.Z) a un ambiente.
+# No compila nada: descarga los .jar de la release y verifica su SHA-256.
+# Lo llaman ci-cd.yml (promoción) y rollback.yml (reversa).
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: dev, qa o prod
+        type: string
+        required: true
+      version:
+        description: Versión publicada (X.Y.Z)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+env:
+  # Mientras la cuenta de Anypoint sea trial (sin vCores para producción), prod corre en
+  # SIMULACIÓN: se ejecutan la aprobación, la separación de funciones, la verificación del
+  # SHA-256, las validaciones y el plan de políticas y despliegue, pero NO se llama a Anypoint.
+  # Cambiar a "true" cuando exista capacidad en prod (y cargar sus secretos y variables).
+  PROD_LIVE: "false"
+
+jobs:
+  deploy:
+    name: ${{ inputs.environment }} · v${{ inputs.version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Reglas del environment (revisores, ramas permitidas) se evalúan ANTES de
+    # que corra el job y de que se expongan sus secretos.
+    environment:
+      name: ${{ inputs.environment }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      VERSION: ${{ inputs.version }}
+      ENVIRONMENT: ${{ inputs.environment }}
+      GH_TOKEN: ${{ github.token }}
+      # Secretos del environment (distintos en dev, qa y prod)
+      ANYPOINT_CLIENT_ID: ${{ secrets.ANYPOINT_CLIENT_ID }}
+      ANYPOINT_CLIENT_SECRET: ${{ secrets.ANYPOINT_CLIENT_SECRET }}
+      EXCHANGE_PASSWORD: ${{ secrets.ANYPOINT_CLIENT_ID }}~?~${{ secrets.ANYPOINT_CLIENT_SECRET }}
+      MULE_KEY: ${{ secrets.MULE_SECURE_KEY }}
+      SMOKE_CLIENT_ID: ${{ secrets.SMOKE_CLIENT_ID }}
+      SMOKE_CLIENT_SECRET: ${{ secrets.SMOKE_CLIENT_SECRET }}
+      # Variables del environment (no sensibles)
+      ANYPOINT_ORG_ID: ${{ vars.ANYPOINT_ORG_ID }}
+      ANYPOINT_ENVIRONMENT: ${{ vars.ANYPOINT_ENVIRONMENT }}
+      CH2_TARGET: ${{ vars.CH2_TARGET }}
+      CH2_REPLICAS: ${{ vars.CH2_REPLICAS }}
+      CH2_VCORES: ${{ vars.CH2_VCORES }}
+      MULE_RUNTIME: ${{ vars.MULE_RUNTIME }}
+      EXPERIENCE_URL: ${{ vars.EXPERIENCE_URL }}
+      RATE_LIMIT_PROBE_REQUESTS: ${{ vars.RATE_LIMIT_PROBE_REQUESTS }}
+      API_INSTANCE_ID_SYSTEM: ${{ vars.API_INSTANCE_ID_SYSTEM }}
+      API_INSTANCE_ID_PROCESS: ${{ vars.API_INSTANCE_ID_PROCESS }}
+      API_INSTANCE_ID_EXPERIENCE: ${{ vars.API_INSTANCE_ID_EXPERIENCE }}
+      # Rutas: scripts y políticas de main; código y configuración de la release
+      SETTINGS: ${{ github.workspace }}/pipeline/.github/maven-settings.xml
+      SRC_DIR: ${{ github.workspace }}/src
+      DIST_DIR: ${{ github.workspace }}/dist
+      POLICIES_DIR: ${{ github.workspace }}/pipeline/policies
+    steps:
+      - name: Validar entradas y modo de despliegue
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Versión inválida: $VERSION"; exit 1; }
+          [[ "$ENVIRONMENT" =~ ^(dev|qa|prod)$ ]] || { echo "::error::Ambiente inválido: $ENVIRONMENT"; exit 1; }
+          if [ "$ENVIRONMENT" = "prod" ] && [ "$PROD_LIVE" != "true" ]; then
+            echo "DRY_RUN=true" >> "$GITHUB_ENV"
+            echo "::notice::prod en SIMULACIÓN (PROD_LIVE=false): se ejecutan aprobación y verificaciones, sin desplegar."
+            required="CH2_REPLICAS"
+          else
+            echo "DRY_RUN=false" >> "$GITHUB_ENV"
+            required="ANYPOINT_CLIENT_ID ANYPOINT_CLIENT_SECRET MULE_KEY SMOKE_CLIENT_ID SMOKE_CLIENT_SECRET \
+                      ANYPOINT_ORG_ID ANYPOINT_ENVIRONMENT CH2_TARGET CH2_REPLICAS CH2_VCORES MULE_RUNTIME \
+                      EXPERIENCE_URL API_INSTANCE_ID_SYSTEM API_INSTANCE_ID_PROCESS API_INSTANCE_ID_EXPERIENCE"
+          fi
+          missing=0
+          # shellcheck disable=SC2086
+          for v in $required; do
+            if [ -z "${!v:-}" ]; then echo "::error::Falta '$v' en el environment '$ENVIRONMENT'"; missing=1; fi
+          done
+          [ "$missing" -eq 0 ]
+
+      - name: Checkout de scripts y políticas (main)
+        uses: actions/checkout@v4
+        with:
+          path: pipeline
+
+      - name: Checkout del código de la release
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/v${{ inputs.version }}
+          path: src
+
+      # Defensa en profundidad: "Prevent self-review" solo impide que apruebe
+      # quien disparó la ejecución. Aquí se exige además que ningún aprobador
+      # sea autor del cambio (commits o PR).
+      - name: Separación de funciones (aprobador distinto del autor)
+        if: inputs.environment == 'prod'
+        env:
+          RUN_ID: ${{ github.run_id }}
+          SHA: ${{ github.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: bash pipeline/scripts/check-approvers.sh
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ vars.JAVA_VERSION || '17' }}
+          cache: maven
+
+      - name: Descargar la release y verificar SHA-256
+        run: |
+          mkdir -p dist
+          gh release download "v${VERSION}" --repo "$GITHUB_REPOSITORY" --dir dist \
+            --pattern '*.jar' --pattern SHA256SUMS
+          (cd dist && sha256sum -c SHA256SUMS)
+
+      - name: Validar configuración por ambiente (compuertas)
+        run: |
+          python3 -m pip install --quiet pyyaml
+          cd "$SRC_DIR"
+          v() { python3 "$GITHUB_WORKSPACE/pipeline/scripts/validate_project.py" "$@" --env "$ENVIRONMENT" --replicas "$CH2_REPLICAS"; }
+          v core-transfers-system
+          v payment-order-process --require-idempotency
+          v transfers-experience-api
+
+      # Las políticas se aplican ANTES del despliegue: la API nace protegida.
+      - name: Políticas como código (Client ID y Rate Limiting)
+        run: |
+          bash pipeline/scripts/apply-policies.sh system
+          bash pipeline/scripts/apply-policies.sh process
+          bash pipeline/scripts/apply-policies.sh experience
+
+      # Orden fijo de abajo hacia arriba: System -> Process -> Experience
+      - name: Desplegar core-transfers-system
+        run: bash pipeline/scripts/deploy-app.sh core-transfers-system
+
+      - name: Desplegar payment-order-process
+        run: bash pipeline/scripts/deploy-app.sh payment-order-process
+
+      - name: Desplegar transfers-experience-api
+        run: bash pipeline/scripts/deploy-app.sh transfers-experience-api
+
+      - name: Prueba de humo
+        run: bash pipeline/scripts/smoke-test.sh
+
+      - name: Resumen
+        if: always()
+        run: |
+          {
+            if [ "${DRY_RUN:-false}" = "true" ]; then
+              echo "### SIMULACIÓN: v${VERSION} verificada para ${ENVIRONMENT} (sin desplegar)"
+            else
+              echo "### Despliegue de v${VERSION} a ${ENVIRONMENT}"
+            fi
+            echo ""
+            echo "| Artefacto | SHA-256 |"
+            echo "|---|---|"
+            if [ -f dist/SHA256SUMS ]; then awk '{printf "| %s | `%s` |\n", $2, substr($1,1,16)}' dist/SHA256SUMS; fi
+            echo ""
+            echo "Disparado por: @${GITHUB_ACTOR} · Ejecución: ${GITHUB_RUN_ID}"
+          } >> "$GITHUB_STEP_SUMMARY"

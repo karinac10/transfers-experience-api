@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Credenciales de Exchange para Maven con una Connected App (nunca un usuario).
+  Formato oficial: usuario literal "~~~Client~~~" y contraseña "client_id~?~client_secret".
+  El workflow arma EXCHANGE_PASSWORD desde secretos; aquí no hay valores.
+  El id del servidor debe coincidir con el <repository> del pom (Studio usa anypoint-exchange-v3).
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <servers>
+    <server>
+      <id>anypoint-exchange-v3</id>
+      <username>~~~Client~~~</username>
+      <password>${env.EXCHANGE_PASSWORD}</password>
+    </server>
+  </servers>
+</settings>
