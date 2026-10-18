@@ -63,7 +63,7 @@ var codigoRechazo = if (statusReason == "INSUFFICIENT_FUNDS") "SALDO_INSUFICIENT
   cuentaOrigen:       payload.PayerProductInstanceReference.ProductReference.ProductIdentification.ProductIdentification.IdentifierValue.Value,
   cuentaDestino:      payload.PayeeProductInstanceReference.ProductReference.ProductIdentification.ProductIdentification.IdentifierValue.Value,
   bancoDestino:       payload.PayeeBankReference.PartyReference.PartyIdentification.PartyIdentification.IdentifierValue.Value,
-  concepto:           payload.RemittanceInformation.Text.toUpperCase(),
+  concepto:           upper(payload.RemittanceInformation.Text as String),
   fechaSolicitud:     payload.Date.DateTimeContent,
   fechaProcesamiento: pis.PaymentInstructionStatus.StatusDateTime.DateTimeContent
 }]]></ee:set-payload>

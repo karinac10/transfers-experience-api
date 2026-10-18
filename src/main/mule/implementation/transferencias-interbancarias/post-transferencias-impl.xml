@@ -41,13 +41,7 @@
                 <logger level="DEBUG"
         doc:name="X-Idempotency-Key present"
         doc:id="e7c39083-2e2d-4dac-b593-dcda5efcbe4d"
-        message="#[
-            %dw 2.0
-            output text/plain
-            ---
-            '[post-transferencias-exp] idempotencyKey=' ++
-            ((vars.idempotencyKey default '') as String)
-        ]"/>
+        message="#[%dw 2.0&#10;            output text/plain&#10;            ---&#10;            '[post-transferencias-exp] idempotencyKey=' ++&#10;            ((vars.idempotencyKey default '') as String)]"/>
             </otherwise>
         </choice>
 
