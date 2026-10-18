@@ -14,15 +14,10 @@
 
     <munit:config name="get-transferencia-suite" doc:id="cc000001-0001-0001-0001-000000000001"/>
 
-    <!-- ================================================================
-         T1 — exp-get-t1-existente-200
-         Mock Process GET retorna Completed + statusCode 200
-         Valida: httpStatus=200, idTransferencia, estado=APROBADA, monto, concepto
-         ================================================================ -->
+    <!-- T1: GET transferencia existente 200 -->
     <munit:test name="exp-get-t1-existente-200"
                 description="GET transferencia existente: Process responde Completed → 200 con datos completos"
                 doc:id="cc000002-0001-0001-0001-000000000002">
-
         <munit:behavior>
             <munit-tools:mock-when processor="http:request" doc:id="cc000003-0001-0001-0001-000000000003">
                 <munit-tools:with-attributes>
@@ -36,20 +31,18 @@
                         value='#[output application/java --- {statusCode: 200, headers: {}}]'/>
                 </munit-tools:then-return>
             </munit-tools:mock-when>
-        </munit:behavior>
-
-        <munit:execution>
-            <munit:set-event doc:id="cc000004-0001-0001-0001-000000000004">
-                <munit:payload mediaType="application/json" value="#[{}]"/>
-                <munit:attributes
+            <munit-tools:set-event doc:id="cc000004-0001-0001-0001-000000000004">
+                <munit-tools:payload mediaType="application/json" value="#[{}]"/>
+                <munit-tools:attributes
                     value='#[output application/java --- {uriParams: {id: "test-order-e2e-uuid-001"}, method: "GET", headers: {}, requestPath: "/api/v1/transferencias/test-order-e2e-uuid-001", requestUri: "/api/v1/transferencias/test-order-e2e-uuid-001"}]'/>
-                <munit:variables>
-                    <munit:variable key="transactionId" value="exp-get-t1-tx-id"/>
-                </munit:variables>
-            </munit:set-event>
+                <munit-tools:variables>
+                    <munit-tools:variable key="transactionId" value="exp-get-t1-tx-id"/>
+                </munit-tools:variables>
+            </munit-tools:set-event>
+        </munit:behavior>
+        <munit:execution>
             <flow-ref name="get-transferencia-experience-impl-sf" doc:id="cc000005-0001-0001-0001-000000000005"/>
         </munit:execution>
-
         <munit:validation>
             <munit-tools:assert-that doc:id="cc000006-0001-0001-0001-000000000006"
                 expression="#[vars.httpStatus]"
@@ -58,7 +51,7 @@
             <munit-tools:assert-that doc:id="cc000007-0001-0001-0001-000000000007"
                 expression="#[payload.id]"
                 is="#[MunitTools::equalTo('test-order-e2e-uuid-001')]"
-                message="idTransferencia debe coincidir con el uriParam id"/>
+                message="id debe coincidir con el uriParam id"/>
             <munit-tools:assert-that doc:id="cc000008-0001-0001-0001-000000000008"
                 expression="#[payload.estado]"
                 is="#[MunitTools::equalTo('APROBADA')]"
@@ -72,20 +65,13 @@
                 is="#[MunitTools::equalTo('PAGO DE PRUEBA')]"
                 message="concepto debe ser uppercase de RemittanceInformation.Text"/>
         </munit:validation>
-
     </munit:test>
 
-    <!-- ================================================================
-         T2 — exp-get-t2-inexistente-404
-         Mock Process GET lanza HTTP:NOT_FOUND
-         Sub-flow captura HTTP:NOT_FOUND y relanza APP:TRANSFER_NOT_FOUND
-         expectedErrorType captura APP:TRANSFER_NOT_FOUND
-         ================================================================ -->
+    <!-- T2: GET transferencia inexistente 404 -->
     <munit:test name="exp-get-t2-inexistente-404"
                 description="GET transferencia inexistente: Process lanza HTTP:NOT_FOUND → sub-flow relanza APP:TRANSFER_NOT_FOUND"
                 expectedErrorType="APP:TRANSFER_NOT_FOUND"
                 doc:id="cc000010-0002-0002-0002-000000000010">
-
         <munit:behavior>
             <munit-tools:mock-when processor="http:request" doc:id="cc000011-0002-0002-0002-000000000011">
                 <munit-tools:with-attributes>
@@ -95,27 +81,24 @@
                     <munit-tools:error typeId="HTTP:NOT_FOUND"/>
                 </munit-tools:then-return>
             </munit-tools:mock-when>
-        </munit:behavior>
-
-        <munit:execution>
-            <munit:set-event doc:id="cc000012-0002-0002-0002-000000000012">
-                <munit:payload mediaType="application/json" value="#[{}]"/>
-                <munit:attributes
+            <munit-tools:set-event doc:id="cc000012-0002-0002-0002-000000000012">
+                <munit-tools:payload mediaType="application/json" value="#[{}]"/>
+                <munit-tools:attributes
                     value='#[output application/java --- {uriParams: {id: "orden-inexistente-999"}, method: "GET", headers: {}, requestPath: "/api/v1/transferencias/orden-inexistente-999", requestUri: "/api/v1/transferencias/orden-inexistente-999"}]'/>
-                <munit:variables>
-                    <munit:variable key="transactionId" value="exp-get-t2-tx-id"/>
-                </munit:variables>
-            </munit:set-event>
+                <munit-tools:variables>
+                    <munit-tools:variable key="transactionId" value="exp-get-t2-tx-id"/>
+                </munit-tools:variables>
+            </munit-tools:set-event>
+        </munit:behavior>
+        <munit:execution>
             <flow-ref name="get-transferencia-experience-impl-sf" doc:id="cc000013-0002-0002-0002-000000000013"/>
         </munit:execution>
-
         <munit:validation>
             <munit-tools:assert-that doc:id="cc000014-0002-0002-0002-000000000014"
                 expression="#[true]"
                 is="#[MunitTools::equalTo(true)]"
-                message="APP:TRANSFER_NOT_FOUND fue propagado correctamente (capturado por expectedErrorType)"/>
+                message="APP:TRANSFER_NOT_FOUND fue propagado correctamente"/>
         </munit:validation>
-
     </munit:test>
 
 </mule>
